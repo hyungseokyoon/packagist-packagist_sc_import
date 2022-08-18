@@ -1,5 +1,6 @@
 package com.example.packagist_scimport.metadata;
 
+import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.*;
@@ -13,14 +14,17 @@ import java.util.List;
 
 public class MetadataHandler {
     // 주어진 bucket_name을 가지고 S3 안에 존재하는 Object 들을 가져오는 메소드
-    public static ArrayList<S3ObjectSummary> getObejctKeys(String bucket_name, AmazonS3 s3){
-        ListObjectsV2Request req = new ListObjectsV2Request().withBucketName(bucket_name);
+    public static ArrayList<S3ObjectSummary> getObejctKeys(String bucket_name, AmazonS3 s3, String record){
+        ListObjectsV2Request req = new ListObjectsV2Request().withBucketName(bucket_name).withPrefix(record);
         ListObjectsV2Result result = s3.listObjectsV2(req);
         ArrayList<S3ObjectSummary> finalresult = new ArrayList<>();
         List<S3ObjectSummary> objects = result.getObjectSummaries();
         finalresult.addAll(objects);
         boolean truncresult = true;
 		while(truncresult == true){
+            if(result.isTruncated()==false){
+                break;
+            }
 			String token = result.getNextContinuationToken();
 			req.setContinuationToken(token);
 
@@ -34,8 +38,9 @@ public class MetadataHandler {
     // Object 정보를 가지고 json 파일 다운로드 진행.
     // 이때, json 파일은 저장이 필요하지 않으므로, json 파일은 overwrite하여 temporary로 저장한다.
 
-    public static void getJSONfiles(S3ObjectSummary os, String bucket_name) throws Exception, Error {
-        final AmazonS3 s3 = AmazonS3ClientBuilder.standard().build();
+    public static File getJSONfiles(S3ObjectSummary os, String bucket_name, String savepath) throws Exception, Error {
+        final AmazonS3 s3 = AmazonS3ClientBuilder.standard().withRegion(Regions.AP_NORTHEAST_2).build();
+        File file = null;
         String objectID;
         try {
             S3Object obj = s3.getObject(bucket_name, os.getKey());
@@ -43,7 +48,7 @@ public class MetadataHandler {
             objectID = os.getKey().substring(os.getKey().lastIndexOf("/")+1).replace(".json", "");
             //임시파일로 저장해서 저장공간 save
             // 저장한 임시파일은 jsonfolder 안에 저장
-            File file = new File( "/home/ubuntu/af_output/work1/jsons/" + objectID + ".json");
+            file = new File( savepath + "work1/jsons/" + objectID + ".json");
             //File file = new File(jsonfilesavepath+os.getKey().substring(os.getKey().lastIndexOf("/")+1));
             FileOutputStream fos = new FileOutputStream(file, false);
             byte[] read_buf = new byte[1024];
@@ -60,6 +65,8 @@ public class MetadataHandler {
             throw new Exception(e);
         }catch (Error er){
             throw new Error(er);
+        }finally {
+            return file;
         }
     }
 }

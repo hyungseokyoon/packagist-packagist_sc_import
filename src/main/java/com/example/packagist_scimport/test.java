@@ -4,11 +4,9 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
-import com.example.packagist_scimport.filedownload.directdownload;
 import com.example.packagist_scimport.metadata.MetadataHandler;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -19,9 +17,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
 
-@SpringBootApplication
-public class PackagistScimportApplication {
-
+public class test {
     public static void main(String[] args) throws Exception {
         // 초기설정 후에 메인 기능 실행.
         // importer 에서 사용될 기본적인 인증정보
@@ -36,9 +32,15 @@ public class PackagistScimportApplication {
         String savepath = "/Users/ddukddi/Documents/programming/packagist/";
         String record = "metadata/packagist/date=1660316400000/info/";
 
+        int count = 0;
+        int zipcount = 0;
+        int gzcount = 0;
+        int xzcount = 0;
+
         // 레코드별 key를 가져오므로써 전체 다운로드 되어야 하는 리스트 생성
         ArrayList<S3ObjectSummary> objects = MetadataHandler.getObejctKeys(bucket_name, s3, record);
         for(S3ObjectSummary object : objects){
+            count ++;
             File json_file = MetadataHandler.getJSONfiles (object, bucket_name, savepath);
 
             JSONParser parser = new JSONParser();
@@ -48,29 +50,30 @@ public class PackagistScimportApplication {
             reader.close();
 
             if(jobj==null){
-                continue;
-            }
-
-            try{
-                JSONObject dist_obj = (JSONObject) jobj.get("dist");
-                if(dist_obj!=null){
-                    if(dist_obj.get("type").equals("zip")){
-                        URL url = new URL((String)dist_obj.get("url"));
-                        ReadableByteChannel rbc = Channels.newChannel(url.openStream());
-                        FileOutputStream fos = new FileOutputStream(savepath + "work1/destination/" + json_file.getName().replace(".json","") + ".zip");
-                        fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
-                        fos.close();
-                        rbc.close();
-
-
+                json_file.delete();
+            }else{
+                try{
+                    JSONObject dist_obj = (JSONObject) jobj.get("dist");
+                    if(dist_obj!=null){
+                        if(dist_obj.get("type").equals("zip")){
+                            URL url = new URL((String)dist_obj.get("url"));
+                            if(getContentDisposition(url).contains(".zip")){
+                                zipcount++;
+                            }else{
+                                System.out.println(json_file.getName());
+                            }
+                        }
                     }
+                }catch(Exception e){
+                    // dist object가 없을경우 exception발생
                 }
-            }catch(Exception e){
-                // dist object가 없을경우 exception발생
+                json_file.delete();
             }
-
-            break;
         }
+        System.out.println("total count : " + count);
+        System.out.println("zipcount : " + zipcount);
+        System.out.println("xzcount : " + xzcount);
+        System.out.println("gzcount : " + gzcount);
     }
 
     public static String getContentDisposition(URL url) {
@@ -78,7 +81,6 @@ public class PackagistScimportApplication {
         try{
             HttpURLConnection httpConn = (HttpURLConnection) url.openConnection();
             int responseCode = httpConn.getResponseCode();
-
             if(responseCode == HttpURLConnection.HTTP_OK) {
                 String disposition = httpConn.getHeaderField("Content-Disposition");
                 File saveFilePath = null;
